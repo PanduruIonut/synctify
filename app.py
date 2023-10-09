@@ -1,6 +1,7 @@
 import os
 import requests
-from flask import Flask, request, redirect, session, jsonify
+from flask_cors import CORS, cross_origin, jsonify
+from flask import Flask, request, redirect, session
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -9,6 +10,11 @@ app.secret_key = os.urandom(24)
 CLIENT_ID = ''
 CLIENT_SECRET = ''
 REDIRECT_URI = 'http://127.0.0.1:8000/callback'  # Replace with your desired Redirect URI
+
+@app.route('/test')
+@cross_origin()
+def test():
+    return "test"
 
 @app.route('/')
 def home():
