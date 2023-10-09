@@ -1,33 +1,37 @@
-import os
 import requests
-from flask_cors import CORS, cross_origin, jsonify
-from flask import Flask, request, redirect, session
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Request
+from fastapi import Response
+from json import JSONDecodeError
+from fastapi.responses import JSONResponse
 
-app = Flask(__name__)
-app.secret_key = os.urandom(24)
+app = FastAPI()
 
-# Replace 'YOUR_CLIENT_ID' and 'YOUR_CLIENT_SECRET' with your own values.
-CLIENT_ID = ''
-CLIENT_SECRET = ''
-REDIRECT_URI = 'http://127.0.0.1:8000/callback'  # Replace with your desired Redirect URI
+origins = [
+    "http://localhost:3000",
+]
 
-@app.route('/test')
-@cross_origin()
-def test():
-    return "test"
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.route('/')
-def home():
-    # Redirect the user to Spotify authorization page
-    auth_url = f'https://accounts.spotify.com/authorize?client_id={CLIENT_ID}&response_type=code&redirect_uri={REDIRECT_URI}&scope=user-library-read playlist-modify-public playlist-modify-private'
-    return redirect(auth_url)
+@app.post('/callback')
+async def callback(request: Request, response: Response):
+    try:
+        data = await request.json()
+    except JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON data")
 
-@app.route('/callback')
-def callback():
-    # Get the authorization code from the query parameters
-    code = request.args.get('code')
+    code = data.get('code')
+    CLIENT_ID = data.get('client_id')
+    CLIENT_SECRET = data.get('client_secret')
+    REDIRECT_URI = data.get('redirect_uri')
 
-    # Exchange the authorization code for an access token
     auth_url = 'https://accounts.spotify.com/api/token'
     auth_response = requests.post(auth_url, {
         'grant_type': 'authorization_code',
@@ -39,17 +43,26 @@ def callback():
 
     auth_response_data = auth_response.json()
     access_token = auth_response_data['access_token']
+    if access_token:
+        response.status_code = 200
+    else:
+        response.status_code = 500
+    return access_token
 
-    # Save the access token in the session for later use
-    session['access_token'] = access_token
+@app.get('/test')
+async def test():
+    return {'message': 'This is a test endpoint.'}
 
-    return redirect('/create_playlist')
+@app.get('/create_playlist')
+async def create_playlist():
+    # Simulate the authorization process
+    # In your Vue.js project, you would handle the Spotify authorization flow
 
-@app.route('/create_playlist')
-def create_playlist():
-    access_token = session.get('access_token')
+    # Replace this with your actual code to obtain the access token
+    access_token = 'YOUR_ACCESS_TOKEN'
+
     if not access_token:
-        return 'Access token not found. Please authorize the app first.'
+        raise HTTPException(status_code=400, detail='Access token not found. Please authorize the app first.')
 
     headers = {
         'Authorization': f'Bearer {access_token}',
@@ -86,13 +99,14 @@ def create_playlist():
     # Add liked songs to the playlist
     endpoint_add_tracks = f'https://api.spotify.com/v1/playlists/{playlist_id}/tracks'
 
-    # split track_uris into chunks of 100 tracks (the maximum number of tracks that can be added per request)
+    # Split track_uris into chunks of 100 tracks (the maximum number of tracks that can be added per request)
     track_uris_chunks = [track_uris[x:x+100] for x in range(0, len(track_uris), 100)]
     for chunk in track_uris_chunks:
         data = {'uris': chunk}
         response_add_tracks = requests.post(endpoint_add_tracks, headers=headers, json=data)
 
-    return 'Playlist created with liked songs!'
+    return {'message': 'Playlist created with liked songs!'}
 
 if __name__ == '__main__':
-    app.run(port=8000, debug=True)
+    import uvicorn
+    uvicorn.run(app, host='127.0.0.1', port=8000)
