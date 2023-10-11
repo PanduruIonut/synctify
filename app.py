@@ -7,6 +7,14 @@ from json import JSONDecodeError
 from fastapi.responses import JSONResponse
 
 from fastapi import Depends, FastAPI, HTTPException
+from sqlalchemy.orm import Session
+
+from  crud import get_user_by_spotify_id, create_user, get_liked_songs_for_user, create_song, get_song_by_details, get_songs, get_users, get_user
+from models import Base
+from schemas import User, UserCreate, Song, SongCreate
+from database import SessionLocal, engine
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -21,6 +29,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@app.get("/user/liked_songs/{user_id}")
+async def get_liked_songs(user_id: str, db: Session = Depends(get_db)):
+    liked_songs = get_liked_songs_for_user(db, user_id)
+    
+    if liked_songs:
+        liked_songs_data = [
+            {
+                "id": song.id,
+                "title": song.title,
+                "artist": song.artist,
+                "album": song.album
+            }
+            for song in liked_songs
+        ]
+        return JSONResponse(content=liked_songs_data)
+    else:
+        return JSONResponse(content={"message": "User not found or has no liked songs"}, status_code=404)
 
 @app.post('/callback')
 async def callback(request: Request, response: Response):
@@ -51,9 +85,31 @@ async def callback(request: Request, response: Response):
         response.status_code = 500
     return access_token
 
-@app.get('/test')
-async def test():
-    return {'message': 'This is a test endpoint.'}
+
+@app.post('/me')
+async def getCurrentUser(request: Request, response: Response):
+    try:
+        data = await request.json()
+    except JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON data")
+
+    access_token = data.get('access_token')
+
+    if not access_token:
+        raise HTTPException(status_code=400, detail='Access token not found. Please authorize the app first.')
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+
+    spotify_response = requests.get('https://api.spotify.com/v1/me', headers=headers)
+    if spotify_response.status_code == 200:
+        response_data = spotify_response.json()
+        return response_data
+    else:
+        raise HTTPException(status_code=spotify_response.status_code, detail='Failed to fetch Spotify data')
+
 
 @app.post('/create_playlist')
 async def create_playlist(request: Request, response: Response):
@@ -72,43 +128,66 @@ async def create_playlist(request: Request, response: Response):
         'Content-Type': 'application/json'
     }
 
-    # Get all the user's liked songs (handle pagination)
-    all_liked_songs = []
-    offset = 0
-    limit = 50
-    while True:
-        endpoint_liked_songs = f'https://api.spotify.com/v1/me/tracks?limit={limit}&offset={offset}'
-        response_liked_songs = requests.get(endpoint_liked_songs, headers=headers)
-        liked_songs = response_liked_songs.json()['items']
+    me_response = requests.get('https://api.spotify.com/v1/me', headers=headers)
+    user_email = me_response.json().get('email')
+    spotify_id = me_response.json().get('id')
+    name = me_response.json().get('display_name')
 
-        if not liked_songs:
-            break
+    db = next(get_db())
+    try:
+        user = get_user_by_spotify_id(db, spotify_id)
+        if not user:
+            user_data = UserCreate(email=user_email, spotify_id=spotify_id, name=name)
+            user = create_user(db, user_data)
+            db.commit()
+        all_liked_songs = []
+        offset = 0
+        limit = 50
+        while True:
+            endpoint_liked_songs = f'https://api.spotify.com/v1/me/tracks?limit={limit}&offset={offset}'
+            response_liked_songs = requests.get(endpoint_liked_songs, headers=headers)
+            liked_songs = response_liked_songs.json().get('items', [])
 
-        all_liked_songs.extend(liked_songs)
-        offset += limit
+            if not liked_songs:
+                break
 
-    # Extract track URIs from all liked songs
-    track_uris = [item['track']['uri'] for item in all_liked_songs]
+            all_liked_songs.extend(liked_songs)
+            offset += limit
 
-    # Create a new playlist with the liked songs
-    endpoint_create_playlist = f'https://api.spotify.com/v1/me/playlists'
-    data = {
-        'name': 'Liked Songs Playlist',
-        'public': False  # Change to True if you want the playlist to be public
-    }
-    response_create_playlist = requests.post(endpoint_create_playlist, headers=headers, json=data)
-    playlist_id = response_create_playlist.json()['id']
+        for song in all_liked_songs:
+            title = song['track']['name']
+            artist = song['track']['artists'][0]['name']
+            album = song['track']['album']['name']
 
-    # Add liked songs to the playlist
-    endpoint_add_tracks = f'https://api.spotify.com/v1/playlists/{playlist_id}/tracks'
+            existing_song = get_song_by_details(db, title, artist)
 
-    # Split track_uris into chunks of 100 tracks (the maximum number of tracks that can be added per request)
-    track_uris_chunks = [track_uris[x:x+100] for x in range(0, len(track_uris), 100)]
-    for chunk in track_uris_chunks:
-        data = {'uris': chunk}
-        response_add_tracks = requests.post(endpoint_add_tracks, headers=headers, json=data)
+            if not existing_song:
+                db_song = create_song(db=db, title=title, artist=artist, album_name=album)
+                user.songs.append(db_song)  # Associate the song with the user
 
-    return {'message': 'Playlist created with liked songs!'}
+        db.commit()
+
+        track_uris = [item['track']['uri'] for item in all_liked_songs]
+
+        endpoint_create_playlist = f'https://api.spotify.com/v1/me/playlists'
+        data = {
+            'name': 'Liked Songs Playlist',
+            'public': False
+        }
+        response_create_playlist = requests.post(endpoint_create_playlist, headers=headers, json=data)
+        playlist_id = response_create_playlist.json()['id']
+
+        endpoint_add_tracks = f'https://api.spotify.com/v1/playlists/{playlist_id}/tracks'
+
+        # Split track_uris into chunks of 100 tracks (the maximum number of tracks that can be added per request)
+        track_uris_chunks = [track_uris[x:x + 100] for x in range(0, len(track_uris), 100)]
+        for chunk in track_uris_chunks:
+            data = {'uris': chunk}
+            response_add_tracks = requests.post(endpoint_add_tracks, headers=headers, json=data)
+
+        return {'message': 'Playlist created with liked songs!'}
+    finally:
+        db.close()
 
 if __name__ == '__main__':
     import uvicorn
