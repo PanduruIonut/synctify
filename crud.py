@@ -2,6 +2,8 @@ from sqlalchemy.orm import Session
 
 from models import User, Song
 from schemas import UserCreate, SongCreate
+from typing import List
+
 
 
 def get_user(db: Session, user_id: int):
@@ -38,8 +40,8 @@ def create_user_song(db: Session, song: SongCreate, user_id: int):
 def get_song_by_details(db: Session, title: str, artist: str):
     return db.query(Song).filter(Song.title == title, Song.artist == artist).first()
 
-def create_song(db: Session, title: str, artist: str, album_name: str):
-    db_song = Song(title=title, artist=artist, album=album_name)
+def create_song(db: Session, title: str, artist: str, album_name: str, preview_url: str, images: List[str], added_at: str):
+    db_song = Song(title=title, artist=artist, album=album_name, preview_url= preview_url, images=images, added_at=added_at)
     db.add(db_song)
     db.commit()
     db.refresh(db_song)

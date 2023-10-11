@@ -7,6 +7,8 @@ class SongBase(BaseModel):
     description: str | None = None
     artists: List[str] | None = None
     album: str | None = None
+    preview_url: str | None = None
+    images: List[str] | None = None
 
 
 class SongCreate(SongBase):
@@ -16,6 +18,9 @@ class SongCreate(SongBase):
 class Song(SongBase):
     id: int
     owner_id: int
+    preview_url: str | None = None
+    images: List[str] | None = None
+    added_at: str | None = None
 
     class Config:
         from_attributes = True

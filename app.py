@@ -1,3 +1,5 @@
+from datetime import datetime
+import json
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,7 +50,10 @@ async def get_liked_songs(user_id: str, db: Session = Depends(get_db)):
                 "id": song.id,
                 "title": song.title,
                 "artist": song.artist,
-                "album": song.album
+                "album": song.album,
+                "preview_url": song.preview_url,
+                "images": song.images,
+                "added_at": datetime.strptime(song.added_at, "%Y-%m-%dT%H:%M:%SZ").strftime("%-d %b %Y"),
             }
             for song in liked_songs
         ]
@@ -158,12 +163,18 @@ async def create_playlist(request: Request, response: Response):
             title = song['track']['name']
             artist = song['track']['artists'][0]['name']
             album = song['track']['album']['name']
+            preview_url = song['track']['preview_url']
+            images = song['track']['album']['images']
+            added_at = song['added_at']
 
+            image_urls = [entry["url"] for entry in images]
+
+            image_urls_json = json.dumps(image_urls)
             existing_song = get_song_by_details(db, title, artist)
 
             if not existing_song:
-                db_song = create_song(db=db, title=title, artist=artist, album_name=album)
-                user.songs.append(db_song)  # Associate the song with the user
+                db_song = create_song(db=db, title=title, artist=artist, album_name=album, preview_url=preview_url, images=image_urls_json, added_at=added_at)
+                user.songs.append(db_song)
 
         db.commit()
 

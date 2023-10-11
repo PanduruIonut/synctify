@@ -1,3 +1,4 @@
+import json
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
@@ -24,5 +25,14 @@ class Song(Base):
     owner_id = Column(Integer, ForeignKey("users.id"))
     artist = Column(String, index=True)
     album = Column(String, index=True)
+    preview_url= Column(String)
+    images=Column(String)
+    added_at= Column(String)
 
     owner = relationship("User", back_populates="songs")
+
+    def set_images(self, images):
+        self.images = json.dumps(images)
+
+    def get_images(self):
+        return json.loads(self.images) if self.images else []
