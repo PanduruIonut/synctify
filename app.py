@@ -6,6 +6,8 @@ from fastapi import Response
 from json import JSONDecodeError
 from fastapi.responses import JSONResponse
 
+from fastapi import Depends, FastAPI, HTTPException
+
 app = FastAPI()
 
 origins = [
@@ -53,13 +55,14 @@ async def callback(request: Request, response: Response):
 async def test():
     return {'message': 'This is a test endpoint.'}
 
-@app.get('/create_playlist')
-async def create_playlist():
-    # Simulate the authorization process
-    # In your Vue.js project, you would handle the Spotify authorization flow
+@app.post('/create_playlist')
+async def create_playlist(request: Request, response: Response):
+    try:
+        data = await request.json()
+    except JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON data")
 
-    # Replace this with your actual code to obtain the access token
-    access_token = 'YOUR_ACCESS_TOKEN'
+    access_token = data.get('access_token')
 
     if not access_token:
         raise HTTPException(status_code=400, detail='Access token not found. Please authorize the app first.')
