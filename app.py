@@ -90,13 +90,7 @@ async def callback(request: Request, response: Response):
     })
 
     auth_response_data = auth_response.json()
-    print(auth_response_data)
-    access_token = auth_response_data['access_token']
-    if access_token:
-        response.status_code = 200
-    else:
-        response.status_code = 500
-    return access_token
+    return auth_response_data
 
 
 @app.post('/me')
@@ -132,6 +126,7 @@ async def create_playlist(request: Request, response: Response):
         raise HTTPException(status_code=400, detail="Invalid JSON data")
 
     access_token = data.get('access_token')
+    refresh_token = data.get('refresh_token')
 
     if not access_token:
         raise HTTPException(status_code=400, detail='Access token not found. Please authorize the app first.')
@@ -151,7 +146,7 @@ async def create_playlist(request: Request, response: Response):
         user = get_user_by_spotify_id(db, spotify_id)
         if not user:
             user_data = UserCreate(email=user_email, spotify_id=spotify_id, name=name)
-            user = create_user(db, user_data)
+            user = create_user(db, user_data, access_token, refresh_token)
             db.commit()
         all_liked_songs = []
         offset = 0
@@ -211,6 +206,48 @@ async def create_playlist(request: Request, response: Response):
     finally:
         db.close()
 
+@app.post("/refresh_token")
+async def refresh_token(request: Request, response: Response):
+    try:
+        data = await request.json()
+    except JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON data")
+
+    user_id = data.get('user_id')
+    refresh_token = data.get('refresh_token')
+    client_secret = data.get('client_id')
+    client_id = data.get('client_secret')
+    db = SessionLocal()
+
+    user = get_user_by_spotify_id(db, user_id)
+
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    token_url = "https://accounts.spotify.com/api/token"
+    data = {
+        'scope': 'user-top-read',
+        'grant_type': 'refresh_token',
+        'refresh_token': refresh_token,
+        'client_id': client_id,
+        'client_secret': client_secret,
+
+    }
+    
+    response = requests.post(token_url, data=data)
+
+    if response.status_code != 200:
+        db.close()
+        raise HTTPException(status_code=400, detail="Token refresh failed")
+
+    token_data = response.json()
+    new_access_token = token_data['access_token']
+
+    user.access_token = new_access_token
+    db.commit()
+    db.close()
+
+    return {"message": "Token refreshed successfully", "new_access_token": new_access_token}
 if __name__ == '__main__':
     import uvicorn
     uvicorn.run(app, host='127.0.0.1', port=8000)

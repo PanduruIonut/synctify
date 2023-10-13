@@ -19,13 +19,13 @@ def get_users(db: Session, skip: int = 0, limit: int = 100):
     return db.query(User).offset(skip).limit(limit).all()
 
 
-def create_user(db: Session, user: UserCreate):
-    db_user = User(email=user.email, spotify_id=user.spotify_id, name = user.name)
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
-
+def create_user(db: Session, user_data: UserCreate, access_token: str, refresh_token: str):
+   user_dict = user_data.model_dump()
+   user = User(**user_dict, access_token=access_token, refresh_token=refresh_token)
+   db.add(user)
+   db.commit()
+   db.refresh(user)
+   return user
 
 def get_songs(db: Session, skip: int = 0, limit: int = 100):
     return db.query(Song).offset(skip).limit(limit).all()
