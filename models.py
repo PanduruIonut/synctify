@@ -1,4 +1,6 @@
+import datetime
 import json
+from click import DateTime
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
@@ -14,6 +16,8 @@ class User(Base):
     songs = relationship("Song", back_populates="owner")
     spotify_id = Column(String)
     name = Column(String)
+    playlist_history = relationship("PlaylistCreationHistory", back_populates="user")
+
 
 
 class Song(Base):
@@ -36,3 +40,12 @@ class Song(Base):
 
     def get_images(self):
         return json.loads(self.images) if self.images else []
+
+
+class PlaylistCreationHistory(Base):
+    __tablename__ = "playlist_creation_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(String, default=datetime.datetime.now().isoformat()) 
+    user = relationship("User", back_populates="playlist_history")

@@ -1,7 +1,7 @@
 from datetime import datetime
 import json
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Request
 from fastapi import Response
@@ -11,8 +11,8 @@ from fastapi.responses import JSONResponse
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 
-from  crud import get_user_by_spotify_id, create_user, get_liked_songs_for_user, create_song, get_song_by_details, get_songs, get_users, get_user
-from models import Base
+from  crud import get_user_by_spotify_id, create_user, get_liked_songs_for_user, create_song, get_song_by_details, get_songs, get_users, get_user, latest_playlist_entry
+from models import Base, PlaylistCreationHistory
 from schemas import User, UserCreate, Song, SongCreate
 from database import SessionLocal, engine
 
@@ -52,12 +52,18 @@ async def get_liked_songs(user_id: str, db: Session = Depends(get_db)):
                 "artist": song.artist,
                 "album": song.album,
                 "preview_url": song.preview_url,
-                "images": song.images,
+                "images": json.loads(song.images),
                 "added_at": datetime.strptime(song.added_at, "%Y-%m-%dT%H:%M:%SZ").strftime("%-d %b %Y"),
             }
             for song in liked_songs
         ]
-        return JSONResponse(content=liked_songs_data)
+        
+        latest_entry = latest_playlist_entry(db, user_id)
+        if latest_entry:
+            last_synced =             last_synced = datetime.strptime(latest_entry.created_at, "%Y-%m-%dT%H:%M:%S.%f").strftime("%-d %b %Y %H:%M:%S")
+        else:
+            last_synced = "N/A"
+        return JSONResponse(content={"liked_songs": liked_songs_data, "last_synced": last_synced})
     else:
         return JSONResponse(content={"message": "User not found or has no liked songs"}, status_code=404)
 
@@ -76,6 +82,7 @@ async def callback(request: Request, response: Response):
     auth_url = 'https://accounts.spotify.com/api/token'
     auth_response = requests.post(auth_url, {
         'grant_type': 'authorization_code',
+        'scope': 'user-top-read',
         'code': code,
         'redirect_uri': REDIRECT_URI,
         'client_id': CLIENT_ID,
@@ -83,6 +90,7 @@ async def callback(request: Request, response: Response):
     })
 
     auth_response_data = auth_response.json()
+    print(auth_response_data)
     access_token = auth_response_data['access_token']
     if access_token:
         response.status_code = 200
@@ -196,6 +204,9 @@ async def create_playlist(request: Request, response: Response):
             data = {'uris': chunk}
             response_add_tracks = requests.post(endpoint_add_tracks, headers=headers, json=data)
 
+        playlist_history_entry = PlaylistCreationHistory(user_id=user.spotify_id)
+        db.add(playlist_history_entry)
+        db.commit()
         return {'message': 'Playlist created with liked songs!'}
     finally:
         db.close()

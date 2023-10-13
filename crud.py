@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from models import User, Song
 from schemas import UserCreate, SongCreate
 from typing import List
+from models import PlaylistCreationHistory
 
 
 
@@ -55,3 +56,16 @@ def get_liked_songs_for_user(db: Session, user_id: int):
         return liked_songs
     else:
         return None
+
+def create_playlist_creation_history(db: Session, user_id: int):
+    playlist_history = PlaylistCreationHistory(user_id=user_id)
+    db.add(playlist_history)
+    db.commit()
+    db.refresh(playlist_history)
+    return playlist_history
+
+def get_playlist_creation_history(db: Session, user_id: int):
+    return db.query(PlaylistCreationHistory).filter(PlaylistCreationHistory.user_id == user_id).all()
+
+def latest_playlist_entry(db: Session, user_id: str):
+    return db.query(PlaylistCreationHistory).filter(PlaylistCreationHistory.user_id == user_id).order_by(PlaylistCreationHistory.created_at.desc()).first()
