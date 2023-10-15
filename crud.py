@@ -19,9 +19,9 @@ def get_users(db: Session, skip: int = 0, limit: int = 100):
     return db.query(User).offset(skip).limit(limit).all()
 
 
-def create_user(db: Session, user_data: UserCreate, access_token: str, refresh_token: str):
+def create_user(db: Session, user_data: UserCreate, access_token: str, refresh_token: str, expires_in:str):
    user_dict = user_data.model_dump()
-   user = User(**user_dict, access_token=access_token, refresh_token=refresh_token)
+   user = User(**user_dict, access_token=access_token, refresh_token=refresh_token, expires_in=expires_in)
    db.add(user)
    db.commit()
    db.refresh(user)
@@ -69,3 +69,9 @@ def get_playlist_creation_history(db: Session, user_id: int):
 
 def latest_playlist_entry(db: Session, user_id: str):
     return db.query(PlaylistCreationHistory).filter(PlaylistCreationHistory.user_id == user_id).order_by(PlaylistCreationHistory.created_at.desc()).first()
+
+def get_tokens_by_spotify_id(db: Session, spotify_id: str):
+    user = db.query(User).filter(User.spotify_id == spotify_id).first()
+    if user:
+        return user.access_token, user.refresh_token
+    return None, None

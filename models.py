@@ -19,6 +19,7 @@ class User(Base):
     playlist_history = relationship("PlaylistCreationHistory", back_populates="user")
     access_token = Column(String, nullable=True)
     refresh_token = Column(String, nullable=True)
+    expires_in = Column(String, nullable=True)
 
 
 
