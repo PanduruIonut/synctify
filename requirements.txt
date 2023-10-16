@@ -11,6 +11,8 @@ Flask==3.0.0
 Flask-Cors==4.0.0
 greenlet==3.0.0
 h11==0.14.0
+httpcore==0.18.0
+httpx==0.25.0
 idna==3.4
 itsdangerous==2.1.2
 Jinja2==3.1.2
@@ -19,6 +21,7 @@ protobuf==4.21.12
 pycparser==2.21
 pydantic==2.4.2
 pydantic_core==2.10.1
+python-multipart==0.0.6
 requests==2.31.0
 schedule==1.2.1
 six==1.16.0
