@@ -4,6 +4,8 @@ from models import User, Song
 from schemas import UserCreate, SongCreate
 from typing import List
 from models import PlaylistCreationHistory
+import requests
+from urllib.parse import quote
 
 
 
@@ -75,3 +77,19 @@ def get_tokens_by_spotify_id(db: Session, spotify_id: str):
     if user:
         return user.access_token, user.refresh_token
     return None, None
+
+def get_lyrics_for_song(title: str, artist: str):
+    url = "https://musixmatch-lyrics-songs.p.rapidapi.com/songs/lyrics"
+
+    querystring = {"t":quote(title),"a":quote(artist)}
+
+    headers = {
+        "X-RapidAPI-Key": "token_here",
+        "X-RapidAPI-Host": "musixmatch-lyrics-songs.p.rapidapi.com"
+    }
+
+    response = requests.get(url, headers=headers, params=querystring)
+
+    print(response.json())
+
+    return response.json()

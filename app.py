@@ -15,7 +15,7 @@ from langdetect import detect
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 
-from  crud import get_user_by_spotify_id, create_user, get_liked_songs_for_user, create_song, get_song_by_details, get_songs, get_users, get_user, latest_playlist_entry
+from  crud import get_lyrics_for_song, get_user_by_spotify_id, create_user, get_liked_songs_for_user, create_song, get_song_by_details, get_songs, get_users, get_user, latest_playlist_entry
 from models import Base, PlaylistCreationHistory
 from schemas import User, UserCreate, Song, SongCreate
 from database import SessionLocal, engine
@@ -204,6 +204,9 @@ async def sync_playlist(access_token, refresh_token, expires_in):
 
             try:
                 lang = detect(title)
+                lyrics = get_lyrics_for_song(title, artist)
+                if (lyrics):
+                    lang = detect(lyrics)
             except Exception as e:
                 print(f"The song: {title} failed with error {e}")
 
