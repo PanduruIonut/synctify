@@ -4,6 +4,8 @@ from models import User, Song
 from schemas import UserCreate, SongCreate
 from typing import List
 from models import PlaylistCreationHistory
+import requests
+from urllib.parse import quote
 
 
 
@@ -41,8 +43,8 @@ def create_user_song(db: Session, song: SongCreate, user_id: int):
 def get_song_by_details(db: Session, title: str, artist: str):
     return db.query(Song).filter(Song.title == title, Song.artist == artist).first()
 
-def create_song(db: Session, title: str, artist: str, album_name: str, preview_url: str, images: List[str], added_at: str):
-    db_song = Song(title=title, artist=artist, album=album_name, preview_url= preview_url, images=images, added_at=added_at)
+def create_song(db: Session, title: str, artist: str, album_name: str, preview_url: str, images: List[str], added_at: str, lang: str):
+    db_song = Song(title=title, artist=artist, album=album_name, preview_url= preview_url, images=images, added_at=added_at, lang=lang)
     db.add(db_song)
     db.commit()
     db.refresh(db_song)
@@ -75,3 +77,19 @@ def get_tokens_by_spotify_id(db: Session, spotify_id: str):
     if user:
         return user.access_token, user.refresh_token
     return None, None
+
+def get_lyrics_for_song(title: str, artist: str):
+    url = "https://musixmatch-lyrics-songs.p.rapidapi.com/songs/lyrics"
+
+    querystring = {"t":quote(title),"a":quote(artist)}
+
+    headers = {
+        "X-RapidAPI-Key": "token_here",
+        "X-RapidAPI-Host": "musixmatch-lyrics-songs.p.rapidapi.com"
+    }
+
+    response = requests.get(url, headers=headers, params=querystring)
+
+    print(response.json())
+
+    return response.json()

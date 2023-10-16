@@ -35,6 +35,7 @@ class Song(Base):
     preview_url= Column(String)
     images=Column(String)
     added_at= Column(String)
+    lang= Column(String)
 
     owner = relationship("User", back_populates="songs")
 

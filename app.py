@@ -10,11 +10,12 @@ from fastapi import Request
 from fastapi import Response
 from json import JSONDecodeError
 from fastapi.responses import JSONResponse
+from langdetect import detect
 
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 
-from  crud import get_user_by_spotify_id, create_user, get_liked_songs_for_user, create_song, get_song_by_details, get_songs, get_users, get_user, latest_playlist_entry
+from  crud import get_lyrics_for_song, get_user_by_spotify_id, create_user, get_liked_songs_for_user, create_song, get_song_by_details, get_songs, get_users, get_user, latest_playlist_entry
 from models import Base, PlaylistCreationHistory
 from schemas import User, UserCreate, Song, SongCreate
 from database import SessionLocal, engine
@@ -59,6 +60,7 @@ async def get_liked_songs(user_id: str, db: Session = Depends(get_db)):
                 "preview_url": song.preview_url,
                 "images": json.loads(song.images),
                 "added_at": datetime.strptime(song.added_at, "%Y-%m-%dT%H:%M:%SZ").strftime("%-d %b %Y"),
+                "lang": song.lang,
             }
             for song in liked_songs
         ]
@@ -200,8 +202,16 @@ async def sync_playlist(access_token, refresh_token, expires_in):
             image_urls_json = json.dumps(image_urls)
             existing_song = get_song_by_details(db, title, artist)
 
+            try:
+                lang = detect(title)
+                lyrics = get_lyrics_for_song(title, artist)
+                if (lyrics):
+                    lang = detect(lyrics)
+            except Exception as e:
+                print(f"The song: {title} failed with error {e}")
+
             if not existing_song:
-                db_song = create_song(db=db, title=title, artist=artist, album_name=album, preview_url=preview_url, images=image_urls_json, added_at=added_at)
+                db_song = create_song(db=db, title=title, artist=artist, album_name=album, preview_url=preview_url, images=image_urls_json, added_at=added_at, lang=lang)
                 user.songs.append(db_song)
 
         db.commit()
